@@ -1,3 +1,4 @@
+// TODO: Deprecate this module in favour of sinon mock module loaded by configuration
 let chromeRealOrFake
 
 if (chrome && chrome.bookmarks) {

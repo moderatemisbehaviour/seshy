@@ -53,7 +53,7 @@ test('Saving, re-opening, then deleting sessions', async t => {
 	// This is breaking the fourth wall a bit because its actually a window with the session manager that we're making assertions against.
 	await assertOpenSessions(t, sessionManagerPage, [unsavedSessionName])
 
-	const window = await createWindow(t, sessionManagerPage)
+	const [window] = await createWindow(t, sessionManagerPage)
 	await sessionManagerPage.reload() // TODO: Try replacing with page.waitForSelector(selector[, options])
 	await assertOpenSessions(t, sessionManagerPage, [unsavedSessionName, unsavedSessionName])
 
@@ -61,15 +61,13 @@ test('Saving, re-opening, then deleting sessions', async t => {
 	await closeNewTab(sessionManagerPage, window)
 
 	const sessionName = 'Test session'
+	await sessionManagerPage.waitForTimeout(1000) // Necessary because the window ID is not removed from the mapping in local storage before the closeWindow promise returns.
 	await updateSessionName(sessionManagerPage, sessionName)
 	await assertSessionName(t, sessionManagerPage, sessionName)
 
 	await closeWindow(sessionManagerPage, window.id)
-	await sessionManagerPage.waitForTimeout(1000) // Necessary because the window ID is not removed from the mapping in local storage before the closeWindow promise returns.
 	await sessionManagerPage.reload()
 	await assertOpenSessions(t, sessionManagerPage, [unsavedSessionName])
-	await sessionManagerPage.waitForTimeout(1000) // Necessary because the window ID is not removed from the mapping in local storage before the closeWindow promise returns.
-	await sessionManagerPage.reload()
 	await assertShelvedSessions(t, sessionManagerPage, [sessionName])
 
 	await sessionManagerPage.reload()
@@ -105,7 +103,6 @@ async function assertOpenSessions(t, sessionManagerPage, expectedUnsavedSessionN
 
 async function assertShelvedSessions(t, sessionManagerPage, expectedShelvedSessionNames) {
 	const shelvedSessionNames = await sessionManagerPage.$$eval('#saved-sessions .session-card input', inputs => inputs.map(input => input.value))
-	// console.log(await sessionManagerPage.innerHTML('body'))
 	t.deepEqual(shelvedSessionNames, expectedShelvedSessionNames)
 }
 
@@ -116,7 +113,7 @@ async function assertSessionName(t, sessionManagerPage, name) {
 }
 
 async function createWindow(t, sessionManagerPage) {
-	const [_, window] = await Promise.all([
+	const [page, window] = await Promise.all([
 		t.context.browserContext.waitForEvent('page'),
 		sessionManagerPage.evaluate(() => new Promise(resolve => {
 			chrome.windows.create(window => {
@@ -124,7 +121,7 @@ async function createWindow(t, sessionManagerPage) {
 			})
 		})),
 	])
-	return window
+	return [window, page]
 }
 
 async function createTab(sessionManagerPage, createProperties) {
@@ -144,28 +141,33 @@ async function closeNewTab(sessionManagerPage, window) {
 }
 
 async function createTabs(sessionManagerPage, windowId, urls) {
-	return await Promise.all(urls.map(url => 
+	await Promise.all(urls.map(url => 
 		createTab(sessionManagerPage, {
 			windowId,
 			url,
 		})
 	))
+	const pages = await sessionManagerPage.context().pages()
+	const openedPages = pages.filter(page => urls.includes(page.url()))
+	await Promise.all(openedPages.map(openedPage => openedPage.waitForLoadState()))
 }
 
-async function updateSessionName(sessionManagerPage, name) {
+async function updateSessionName (sessionManagerPage, name) {
 	const editButton = await sessionManagerPage.$('.session-card:nth-child(2) .edit-button')
 	await editButton.click()
 	await sessionManagerPage.keyboard.type(name)
 	await editButton.click()
 }
 
-async function closeWindow(sessionManagerPage, windowId) {
-	return await sessionManagerPage.evaluate(windowId => new Promise(resolve => {
+async function closeWindow (sessionManagerPage, windowId) {
+	const window = await sessionManagerPage.evaluate(windowId => new Promise(resolve => {
 		chrome.windows.remove(windowId, resolve)
 	}), windowId)
+	await sessionManagerPage.waitForTimeout(1000) // Necessary because it returns before the window is actually considered closed by Chrome. Wait on page close doesn't work because that's only one tab.
+	return window
 }
 
-async function resumeSession(sessionManagerPage, sessionName) {
+async function resumeSession (sessionManagerPage, sessionName) {
 	const resumeButton = await sessionManagerPage.$(`.session-card:has(.session-name-input[value="${sessionName}"]) .resume-button`)
 	await resumeButton.click()
 }

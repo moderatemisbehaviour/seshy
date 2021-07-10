@@ -7,9 +7,9 @@
     	"service_worker": "worker-wrapper.js"
 	},
 	"action": {
-		"default_icon": "/status/unsaved.png",
+		"default_icon": "/ui/status/unsaved.png",
 		"default_title": "Manage your sessions.",
-		"default_popup": "/index.html"
+		"default_popup": "/ui/index.html"
 	},
 	"commands": {
 		"_execute_action": {
@@ -22,9 +22,9 @@
 		}
 	},
 	"icons": {
-		"16": "icons/seshy-logo-16.png",
-		"48": "icons/seshy-logo-48.png",
-		"128": "icons/seshy-logo-128.png"
+		"16": "ui/icons/seshy-logo-16.png",
+		"48": "ui/icons/seshy-logo-48.png",
+		"128": "ui/icons/seshy-logo-128.png"
 	},
 	"permissions": [
 		"bookmarks",
